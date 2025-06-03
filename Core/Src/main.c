@@ -103,12 +103,13 @@ void toggleLedTask(void *pvParameters)
 
 void UART(void *pvParameters)
 {
-    char receivedString[7];
+    char receivedString[6];
     while (1)
     {
         // Tenta ler os dados da UART com um tempo de espera de 100 ms (ajustável)
-        if (HAL_UART_Receive(&huart2, (uint8_t *)receivedString, 6, 200) == HAL_OK)
+        if (HAL_UART_Receive(&huart2, (uint8_t *)receivedString, 5, 100) == HAL_OK)
         {
+        	receivedString[5] = '\0';
             // Protege o LCD com o semáforo
             if (xSemaphoreTake(xLCDSemaphore, portMAX_DELAY) == pdTRUE)  // Verifica se consegue pegar o semáforo
             {
