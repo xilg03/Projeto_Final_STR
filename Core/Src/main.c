@@ -130,42 +130,70 @@ void keypad(void *pvParameters) {
 
 // Tarefa 2 para contar e exibir o contador no LCD
 void conta(void *pvParameters){
-    while (1){
-        char num[6];
-        sprintf(num, "%d", cont);
+    // TAREFA 2: "O valor atual do contador deve ser mostrado no início da linha 2 do LCD [3]
+    // e enviado pela serial [B] a cada 200mS;"
+    // Esta tarefa atualmente só mostra no LCD. O envio serial precisaria ser adicionado.
+    // 'cont' é um int global. Para um contador de 16 bits, uint16_t cont; seria mais apropriado.
+    char num_str[7]; // Suficiente para "65535\0" (se uint16_t) ou "-32768\0" (se int)
 
-        // Protege o LCD
-        //xSemaphoreTake(xLCDSemaphore, portMAX_DELAY);
-        // Verifica se consegue pegar o semáforo
-        if (xSemaphoreTake(xLCDSemaphore, portMAX_DELAY) == pdTRUE){
+    while (1){
+        // É uma boa prática proteger o acesso à variável global 'cont' com um semáforo
+        // se ela for modificada pela task 'keypad' e lida aqui, para evitar race conditions.
+        // O semáforo xCounterSemaphore foi criado mas não está sendo usado.
+        // Ex: if (xSemaphoreTake(xCounterSemaphore, pdMS_TO_TICKS(10)) == pdTRUE) {
+        //         sprintf(num_str, "%d", cont); // ou "%u" para uint16_t
+        //         xSemaphoreGive(xCounterSemaphore);
+        //     }
+
+        sprintf(num_str, "%d", cont); // Se 'cont' for uint16_t, use "%u"
+
+        // Protege o LCD com o semáforo
+        // Usar timeout no semáforo
+        if (xSemaphoreTake(xLCDSemaphore, pdMS_TO_TICKS(50)) == pdTRUE){
+          lcd_put_cur(1, 5);          // Posição para CONT=XXXXX
+          lcd_send_string("     ");   // Limpa valor anterior (assumindo máx 5 dígitos para cont)
           lcd_put_cur(1, 5);
-          lcd_send_string(num);
+          lcd_send_string(num_str);
+          
           xSemaphoreGive(xLCDSemaphore);  // Libera o LCD
         }
+        // else: O LCD estava ocupado. Tentar novamente no próximo ciclo.
 
-        delay(100);
+        // TODO: Adicionar envio do contador 'cont' pela serial a cada 200ms (parte [B] da TAREFA 2).
+        // char serial_msg[20];
+        // sprintf(serial_msg, "CONTADOR=%d\r\n", cont);
+        // HAL_UART_Transmit(&huart2, (uint8_t *)serial_msg, strlen(serial_msg), 100);
+        // Considere usar um semáforo para proteger a transmissão UART se for a mesma porta da task UART.
+
+        vTaskDelay(pdMS_TO_TICKS(200)); // Conforme TAREFA 2: "a cada 200mS"
     }
 }
 
 // Tarefa 3 para ler dados da UART e exibir no LCD
 void UART(void *pvParameters){
-    char receivedString[6];
+    char receivedString[6]; // 5 bytes de dados + caractere nulo '\0'
     while (1){
-        // Tenta ler os dados da UART com um tempo de espera de 100 ms (ajustável)
-        if (HAL_UART_Receive(&huart2, (uint8_t *)receivedString, 5, 100) == HAL_OK)
-        {
-        	receivedString[5] = '\0';
+        // Tenta ler 5 bytes da UART com timeout de 100ms.
+        if (HAL_UART_Receive(&huart2, (uint8_t *)receivedString, 5, 100) == HAL_OK){
+            receivedString[5] = '\0'; // Garante a terminação nula da string
+
             // Protege o LCD com o semáforo
-            // Verifica se consegue pegar o semáforo
-            if (xSemaphoreTake(xLCDSemaphore, portMAX_DELAY) == pdTRUE){
+            // Usar timeout
+            if (xSemaphoreTake(xLCDSemaphore, pdMS_TO_TICKS(50)) == pdTRUE){
+                lcd_put_cur(1, 10);          // Posição para a string recebida (após "CONT=XXXXX ")
+                                             // A imagem mostra "UNIFOR" (6 chars) como placeholder.
+                                             // TAREFA 3 especifica "até 5 bytes".
+                lcd_send_string("      ");   // Limpa 6 caracteres (para cobrir "UNIFOR" ou similar)
                 lcd_put_cur(1, 10);
-                lcd_send_string(receivedString);
+                lcd_send_string(receivedString); // Mostra a string de 5 bytes recebida
                 xSemaphoreGive(xLCDSemaphore);  // Libera o semáforo para o LCD
             }
+            // else: O LCD estava ocupado. Os dados foram recebidos mas não mostrados.
         }
         else{
-            // Caso não tenha recebido dados, a tarefa pode fazer algo útil, como esperar ou realizar outra ação
-            vTaskDelay(200);  // Tempo curto para dar chance para outras tarefas
+            // Timeout ou erro na recepção.
+            // Cede tempo para outras tarefas. Um delay curto permite verificar a UART mais frequentemente.
+            vTaskDelay(pdMS_TO_TICKS(20)); // Delay de 20ms antes de tentar receber novamente
         }
     }
 }
