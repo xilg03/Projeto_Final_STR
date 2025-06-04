@@ -2123,7 +2123,7 @@ int main(void)
  8001514:	08001545 	.word	0x08001545
 
 08001518 <toggleLedTask>:
-
+// Tarefa 4 para alternar o LED
 void toggleLedTask(void *pvParameters)
 {
  8001518:	b580      	push	{r7, lr}
@@ -2156,6 +2156,7 @@ void toggleLedTask(void *pvParameters)
     }
 }
 
+// Tarefa 3 para ler dados da UART e exibir no LCD
 void UART(void *pvParameters)
 {
  8001544:	b580      	push	{r7, lr}
@@ -2226,7 +2227,7 @@ void UART(void *pvParameters)
     }
 }
 
-
+// Tarefa 2 para ler o teclado e exibir os dados no LCD
 void keypad(void *pvParameters) {
  80015b0:	b580      	push	{r7, lr}
  80015b2:	b08c      	sub	sp, #48	@ 0x30
@@ -2446,7 +2447,7 @@ void keypad(void *pvParameters) {
     }
 }
 
-
+// Tarefa 1 para contar e exibir o contador no LCD
 void conta(void *pvParameters)
 {
  800174c:	b580      	push	{r7, lr}

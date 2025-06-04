@@ -1,18 +1,3 @@
-/* USER CODE BEGIN Header */
-/**
-  *******************************************************************************
-  * @file           : main.c
-  * @brief          : Main program body
-  *******************************************************************************
-  * @attention
-  *
-  * Copyright (c) 2024 STMicroelectronics.
-  * All rights reserved.
-  *
-  *******************************************************************************
-  */
-/* USER CODE END Header */
-/* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "cmsis_os.h"
 #include "usart.h"
@@ -89,7 +74,7 @@ int main(void)
 
     return 0;
 }
-
+// Tarefa 4 para alternar o LED
 void toggleLedTask(void *pvParameters)
 {
     while (1)
@@ -101,6 +86,7 @@ void toggleLedTask(void *pvParameters)
     }
 }
 
+// Tarefa 3 para ler dados da UART e exibir no LCD
 void UART(void *pvParameters)
 {
     char receivedString[6];
@@ -126,7 +112,7 @@ void UART(void *pvParameters)
     }
 }
 
-
+// Tarefa 2 para ler o teclado e exibir os dados no LCD
 void keypad(void *pvParameters) {
     int bounce = 0;
     //int cont = 0; // Declarada adequadamente
@@ -179,7 +165,7 @@ void keypad(void *pvParameters) {
     }
 }
 
-
+// Tarefa 1 para contar e exibir o contador no LCD
 void conta(void *pvParameters)
 {
     while (1)
