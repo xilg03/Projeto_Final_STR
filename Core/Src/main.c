@@ -170,31 +170,64 @@ void conta(void *pvParameters){
 }
 
 // Tarefa 3 para ler dados da UART e exibir no LCD
-void UART(void *pvParameters){
-    char receivedString[6]; // 5 bytes de dados + caractere nulo '\0'
-    while (1){
-        // Tenta ler 5 bytes da UART com timeout de 100ms.
-        if (HAL_UART_Receive(&huart2, (uint8_t *)receivedString, 5, 100) == HAL_OK){
-            receivedString[5] = '\0'; // Garante a terminação nula da string
+void UART(void *pvParameters) {
+    char receivedBuffer[6];      // Buffer para HAL_UART_Receive (máximo 5 caracteres + nulo)
+    char displayString[6];       // Buffer para o display LCD (exatamente 5 caracteres + nulo)
+    HAL_StatusTypeDef status;
+    uint32_t num_bytes_recebidos = 0;
+    uint8_t dummy_char_for_flush; // Variável para descartar bytes ao limpar o buffer UART RX
 
-            // Protege o LCD com o semáforo
-            // Usar timeout
-            if (xSemaphoreTake(xLCDSemaphore, pdMS_TO_TICKS(50)) == pdTRUE){
-                lcd_put_cur(1, 10);          // Posição para a string recebida (após "CONT=XXXXX ")
-                                             // A imagem mostra "UNIFOR" (6 chars) como placeholder.
-                                             // TAREFA 3 especifica "até 5 bytes".
-                lcd_send_string("      ");   // Limpa 6 caracteres (para cobrir "UNIFOR" ou similar)
-                lcd_put_cur(1, 10);
-                lcd_send_string(receivedString); // Mostra a string de 5 bytes recebida
-                xSemaphoreGive(xLCDSemaphore);  // Libera o semáforo para o LCD
+    while (1) {
+        num_bytes_recebidos = 0; // Reinicia para cada tentativa
+
+        // Tenta receber até 5 bytes com timeout de 100ms
+        status = HAL_UART_Receive(&huart2, (uint8_t *)receivedBuffer, 5, 100);
+
+        if (status == HAL_OK) {
+            num_bytes_recebidos = 5; // Todos os 5 bytes foram recebidos
+        } else if (status == HAL_TIMEOUT) {
+            // Timeout. Calcula quantos bytes foram recebidos antes do timeout.
+            // 5 é o tamanho solicitado. huart2.RxXferCount é o número de bytes que faltavam.
+            if (5 >= huart2.RxXferCount) {
+                 num_bytes_recebidos = 5 - huart2.RxXferCount;
+            } else {
+                 num_bytes_recebidos = 0; // Situação inesperada
             }
-            // else: O LCD estava ocupado. Os dados foram recebidos mas não mostrados.
+        } else { // HAL_ERROR ou outros estados
+            num_bytes_recebidos = 0; // Nenhum dado válido
+            // Adicionar log de erro se necessário: printf("UART Rx Error: %d\r\n", status);
         }
-        else{
-            // Timeout ou erro na recepção.
-            // Cede tempo para outras tarefas. Um delay curto permite verificar a UART mais frequentemente.
-            vTaskDelay(pdMS_TO_TICKS(20)); // Delay de 20ms antes de tentar receber novamente
+
+        // Se algum caractere foi efetivamente recebido
+        if (num_bytes_recebidos > 0) {
+            // 1. Prepara a string de 5 caracteres para o display (com padding de espaços)
+            memset(displayString, ' ', 5); // Preenche com 5 espaços
+            memcpy(displayString, receivedBuffer, num_bytes_recebidos); // Copia os bytes recebidos
+            displayString[5] = '\0';       // Adiciona terminador nulo
+
+            // 2. Atualiza o LCD
+            if (xSemaphoreTake(xLCDSemaphore, pdMS_TO_TICKS(50)) == pdTRUE) {
+                lcd_put_cur(1, 10);
+                // Limpa 6 posições no LCD para remover restos de strings anteriores (como "UNIFOR")
+                lcd_send_string("      ");
+                lcd_put_cur(1, 10);            // Reposiciona o cursor
+                lcd_send_string(displayString); // Escreve a nova string de 5 caracteres
+                xSemaphoreGive(xLCDSemaphore);
+            }
+
+            // 3. Tenta limpar (flush) quaisquer caracteres restantes no buffer FIFO da UART RX.
+            //    Isso evita que restos de uma transmissão longa sejam lidos como
+            //    o início da próxima mensagem. Usa leituras não bloqueantes (timeout 0).
+            while (HAL_UART_Receive(&huart2, &dummy_char_for_flush, 1, 0) == HAL_OK) {
+                // Continua lendo e descartando 1 byte por vez enquanto houver dados
+                // e a leitura for bem-sucedida (HAL_OK).
+                // O timeout 0 faz com que HAL_UART_Receive retorne HAL_TIMEOUT imediatamente se não houver dados.
+            }
         }
+        // else: Nenhum dado recebido ou erro, então o LCD não é atualizado e o flush não é necessário.
+
+        // Pausa antes da próxima tentativa de leitura para ceder tempo a outras tarefas.
+        vTaskDelay(pdMS_TO_TICKS(20));
     }
 }
 
@@ -207,11 +240,7 @@ void toggleLedTask(void *pvParameters){
     }
 }
 
-
-
-
-void SystemClock_Config(void)
-{
+void SystemClock_Config(void){
     RCC_OscInitTypeDef RCC_OscInitStruct = {0};
     RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
 
@@ -227,8 +256,7 @@ void SystemClock_Config(void)
     RCC_OscInitStruct.PLL.PLLN = 336;
     RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV4;
     RCC_OscInitStruct.PLL.PLLQ = 7;
-    if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
-    {
+    if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK){
         Error_Handler();
     }
 
@@ -239,26 +267,21 @@ void SystemClock_Config(void)
     RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
     RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
 
-    if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK)
-    {
+    if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK){
         Error_Handler();
     }
 }
 
-void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
-{
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
     // Interrupção do timer
-    if (htim->Instance == TIM2)
-    {
+    if (htim->Instance == TIM2){
         BaseType_t xHigherPriorityTaskWoken = pdFALSE;
         xSemaphoreGiveFromISR(xBinarySemaphore, &xHigherPriorityTaskWoken);
         portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
     }
 }
 
-
-void Error_Handler(void)
-{
+void Error_Handler(void){
     __disable_irq();
     while (1)
     {
