@@ -74,45 +74,8 @@ int main(void)
 
     return 0;
 }
-// Tarefa 4 para alternar o LED
-void toggleLedTask(void *pvParameters)
-{
-    while (1)
-    {
-        GPIOA->BSRR = (1U << 21);
-        delay(100);
-        GPIOA->BSRR = LED;
-        delay(100);
-    }
-}
 
-// Tarefa 3 para ler dados da UART e exibir no LCD
-void UART(void *pvParameters)
-{
-    char receivedString[6];
-    while (1)
-    {
-        // Tenta ler os dados da UART com um tempo de espera de 100 ms (ajustável)
-        if (HAL_UART_Receive(&huart2, (uint8_t *)receivedString, 5, 100) == HAL_OK)
-        {
-        	receivedString[5] = '\0';
-            // Protege o LCD com o semáforo
-            if (xSemaphoreTake(xLCDSemaphore, portMAX_DELAY) == pdTRUE)  // Verifica se consegue pegar o semáforo
-            {
-                lcd_put_cur(1, 10);
-                lcd_send_string(receivedString);
-                xSemaphoreGive(xLCDSemaphore);  // Libera o semáforo para o LCD
-            }
-        }
-        else
-        {
-            // Caso não tenha recebido dados, a tarefa pode fazer algo útil, como esperar ou realizar outra ação
-            vTaskDelay(200);  // Tempo curto para dar chance para outras tarefas
-        }
-    }
-}
-
-// Tarefa 2 para ler o teclado e exibir os dados no LCD
+// Tarefa 1 para ler o teclado e exibir os dados no LCD
 void keypad(void *pvParameters) {
     int bounce = 0;
     //int cont = 0; // Declarada adequadamente
@@ -165,18 +128,16 @@ void keypad(void *pvParameters) {
     }
 }
 
-// Tarefa 1 para contar e exibir o contador no LCD
-void conta(void *pvParameters)
-{
-    while (1)
-    {
+// Tarefa 2 para contar e exibir o contador no LCD
+void conta(void *pvParameters){
+    while (1){
         char num[6];
         sprintf(num, "%d", cont);
 
         // Protege o LCD
         //xSemaphoreTake(xLCDSemaphore, portMAX_DELAY);
-        if (xSemaphoreTake(xLCDSemaphore, portMAX_DELAY) == pdTRUE)  // Verifica se consegue pegar o semáforo
-        {
+        // Verifica se consegue pegar o semáforo
+        if (xSemaphoreTake(xLCDSemaphore, portMAX_DELAY) == pdTRUE){
           lcd_put_cur(1, 5);
           lcd_send_string(num);
           xSemaphoreGive(xLCDSemaphore);  // Libera o LCD
@@ -185,6 +146,41 @@ void conta(void *pvParameters)
         delay(100);
     }
 }
+
+// Tarefa 3 para ler dados da UART e exibir no LCD
+void UART(void *pvParameters){
+    char receivedString[6];
+    while (1){
+        // Tenta ler os dados da UART com um tempo de espera de 100 ms (ajustável)
+        if (HAL_UART_Receive(&huart2, (uint8_t *)receivedString, 5, 100) == HAL_OK)
+        {
+        	receivedString[5] = '\0';
+            // Protege o LCD com o semáforo
+            // Verifica se consegue pegar o semáforo
+            if (xSemaphoreTake(xLCDSemaphore, portMAX_DELAY) == pdTRUE){
+                lcd_put_cur(1, 10);
+                lcd_send_string(receivedString);
+                xSemaphoreGive(xLCDSemaphore);  // Libera o semáforo para o LCD
+            }
+        }
+        else{
+            // Caso não tenha recebido dados, a tarefa pode fazer algo útil, como esperar ou realizar outra ação
+            vTaskDelay(200);  // Tempo curto para dar chance para outras tarefas
+        }
+    }
+}
+
+// Tarefa 4 para alternar o LED
+void toggleLedTask(void *pvParameters){
+    // Assumindo que 'LED' é GPIO_PIN_5 em GPIOA (PA5), comum em placas Nucleo.
+    while (1){
+        HAL_GPIO_TogglePin(GPIOA, LED); // Alterna o estado do LED PA5
+        vTaskDelay(pdMS_TO_TICKS(500)); // Pausa por 500ms, conforme TAREFA 4
+    }
+}
+
+
+
 
 void SystemClock_Config(void)
 {
